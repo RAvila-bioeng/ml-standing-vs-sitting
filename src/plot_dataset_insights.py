@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from load_data import PROJECT_ROOT, load_full_dataset
+from load_data import PROJECT_ROOT, filter_sitting_standing, load_full_dataset
 
 
 OUTPUT_DIR = PROJECT_ROOT / "results" / "dataset_insights"
@@ -102,6 +102,19 @@ def pick_representative_features(df: pd.DataFrame, feature_cols: list[str]) -> l
     return selected
 
 
+def pick_sitting_standing_features(df: pd.DataFrame, feature_cols: list[str], top_n: int = 4) -> list[str]:
+    sitting_standing_df = filter_sitting_standing(df)
+    mean_by_activity = sitting_standing_df.groupby("activity_name")[feature_cols].mean().T
+    return (
+        (mean_by_activity["STANDING"] - mean_by_activity["SITTING"])
+        .abs()
+        .sort_values(ascending=False)
+        .head(top_n)
+        .index
+        .tolist()
+    )
+
+
 def plot_activity_distribution(counts: pd.DataFrame):
     ax = counts.plot(
         kind="bar",
@@ -119,27 +132,6 @@ def plot_activity_distribution(counts: pd.DataFrame):
     save_current_figure("activity_distribution.png")
 
 
-def plot_subject_activity_heatmap(df: pd.DataFrame):
-    table = (
-        df.groupby(["subject", "activity_name"])
-        .size()
-        .unstack(fill_value=0)
-        .reindex(columns=ACTIVITY_ORDER)
-        .sort_index()
-    )
-
-    plt.figure(figsize=(11, 6))
-    plt.imshow(table.values, aspect="auto", cmap="YlGnBu")
-    plt.colorbar(label="Numero de muestras")
-    plt.title("Muestras por sujeto y actividad")
-    plt.xlabel("Actividad")
-    plt.ylabel("Sujeto")
-    plt.xticks(range(len(table.columns)), table.columns, rotation=30, ha="right")
-    plt.yticks(range(len(table.index)), table.index)
-
-    save_current_figure("subject_activity_heatmap.png")
-
-
 def plot_pca_projection(df: pd.DataFrame, feature_cols: list[str]):
     samples = []
     for activity, group in df.groupby("activity_name"):
@@ -148,7 +140,9 @@ def plot_pca_projection(df: pd.DataFrame, feature_cols: list[str]):
     sample_df = pd.concat(samples, ignore_index=True)
 
     scaled = StandardScaler().fit_transform(sample_df[feature_cols])
-    components = PCA(n_components=2, random_state=42).fit_transform(scaled)
+    pca = PCA(n_components=2, random_state=42)
+    components = pca.fit_transform(scaled)
+    explained_variance = pca.explained_variance_ratio_ * 100
 
     plt.figure(figsize=(9, 7))
     for activity in ACTIVITY_ORDER:
@@ -163,8 +157,8 @@ def plot_pca_projection(df: pd.DataFrame, feature_cols: list[str]):
         )
 
     plt.title("Proyeccion PCA del dataset completo")
-    plt.xlabel("Componente principal 1")
-    plt.ylabel("Componente principal 2")
+    plt.xlabel(f"PC1 ({explained_variance[0]:.1f}% de varianza explicada)")
+    plt.ylabel(f"PC2 ({explained_variance[1]:.1f}% de varianza explicada)")
     plt.legend(loc="best", fontsize=8)
 
     save_current_figure("pca_projection.png")
@@ -219,9 +213,110 @@ def plot_feature_correlation(df: pd.DataFrame, selected_features: list[str]):
     save_current_figure("representative_feature_correlation.png")
 
 
+def plot_sitting_standing_feature_boxplots(df: pd.DataFrame, selected_features: list[str]):
+    filtered_df = filter_sitting_standing(df)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    axes = axes.ravel()
+    class_order = ["SITTING", "STANDING"]
+    class_colors = {"SITTING": "#E45756", "STANDING": "#F58518"}
+
+    for idx, feature in enumerate(selected_features):
+        ax = axes[idx]
+        data = [
+            filtered_df.loc[filtered_df["activity_name"] == activity, feature]
+            for activity in class_order
+        ]
+        box = ax.boxplot(data, patch_artist=True, tick_labels=class_order)
+        for patch, activity in zip(box["boxes"], class_order):
+            patch.set_facecolor(class_colors[activity])
+            patch.set_alpha(0.7)
+
+        ax.set_title(feature, fontsize=9)
+        ax.tick_params(axis="x", labelsize=8)
+        ax.tick_params(axis="y", labelsize=8)
+
+    for idx in range(len(selected_features), len(axes)):
+        fig.delaxes(axes[idx])
+
+    fig.suptitle("Variables que mejor separan SITTING y STANDING", fontsize=14)
+    fig.tight_layout()
+    fig.savefig(OUTPUT_DIR / "sitting_vs_standing_boxplots.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def pick_subject_for_sitting_standing_plot(df: pd.DataFrame) -> int:
+    filtered_df = filter_sitting_standing(df)
+    subject_counts = (
+        filtered_df.groupby(["subject", "activity_name"])
+        .size()
+        .unstack(fill_value=0)
+    )
+    eligible_subjects = subject_counts[
+        (subject_counts["SITTING"] >= 60) & (subject_counts["STANDING"] >= 60)
+    ]
+
+    if not eligible_subjects.empty:
+        return int(eligible_subjects.sum(axis=1).idxmax())
+
+    return int(subject_counts.sum(axis=1).idxmax())
+
+
+def plot_subject_sitting_standing_signals(df: pd.DataFrame, selected_features: list[str]):
+    filtered_df = filter_sitting_standing(df)
+    subject_id = pick_subject_for_sitting_standing_plot(df)
+    subject_df = filtered_df[filtered_df["subject"] == subject_id].copy()
+    class_order = ["SITTING", "STANDING"]
+    features_to_plot = selected_features[: min(3, len(selected_features))]
+
+    fig, axes = plt.subplots(len(features_to_plot), 1, figsize=(12, 8), sharex=False)
+    if len(features_to_plot) == 1:
+        axes = [axes]
+
+    for ax, feature in zip(axes, features_to_plot):
+        start = 0
+        tick_positions = []
+        tick_labels = []
+
+        for activity in class_order:
+            values = (
+                subject_df.loc[subject_df["activity_name"] == activity, feature]
+                .reset_index(drop=True)
+            )
+            x_values = range(start, start + len(values))
+            ax.plot(
+                list(x_values),
+                values,
+                color=ACTIVITY_COLORS[activity],
+                linewidth=2,
+                label=activity,
+            )
+            ax.axvspan(start, start + len(values) - 1, color=ACTIVITY_COLORS[activity], alpha=0.08)
+            tick_positions.append(start + (len(values) // 2))
+            tick_labels.append(activity)
+            start += len(values)
+
+        ax.set_title(feature, fontsize=10)
+        ax.set_ylabel("Valor")
+        ax.set_xticks(tick_positions, tick_labels)
+        ax.grid(alpha=0.25)
+
+    axes[0].legend(loc="upper right")
+    axes[-1].set_xlabel(f"Muestras consecutivas del sujeto {subject_id}")
+    fig.suptitle(
+        f"Comparacion secuencial entre SITTING y STANDING para el sujeto {subject_id}",
+        fontsize=14,
+    )
+    fig.tight_layout()
+    fig.savefig(OUTPUT_DIR / "subject_sitting_vs_standing_signals.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def write_summary(train_df: pd.DataFrame, test_df: pd.DataFrame, feature_cols: list[str]):
     counts = get_activity_counts(train_df, test_df)
     feature_groups = summarize_feature_groups(feature_cols)
+    combined_df = pd.concat([train_df, test_df], ignore_index=True)
+    sitting_standing_features = pick_sitting_standing_features(combined_df, feature_cols)
+    subject_id = pick_subject_for_sitting_standing_plot(combined_df)
 
     with open(OUTPUT_DIR / "dataset_summary.txt", "w", encoding="utf-8") as handle:
         handle.write("Dataset summary\n")
@@ -237,6 +332,11 @@ def write_summary(train_df: pd.DataFrame, test_df: pd.DataFrame, feature_cols: l
         handle.write("\n\nFeature groups\n")
         handle.write("--------------\n")
         handle.write(feature_groups.to_string(index=False))
+        handle.write("\n\nBest features for SITTING vs STANDING\n")
+        handle.write("-------------------------------------\n")
+        for feature in sitting_standing_features:
+            handle.write(f"- {feature}\n")
+        handle.write(f"\nSubject used for sequential plot: {subject_id}\n")
 
 
 def main():
@@ -244,13 +344,15 @@ def main():
     df = pd.concat([train_df, test_df], ignore_index=True)
     feature_cols = get_feature_columns(df)
     selected_features = pick_representative_features(df, feature_cols)
+    sitting_standing_features = pick_sitting_standing_features(df, feature_cols)
 
     plot_activity_distribution(get_activity_counts(train_df, test_df))
-    plot_subject_activity_heatmap(df)
     plot_pca_projection(df, feature_cols)
     plot_top_variable_features(df, feature_cols)
     plot_feature_distributions(df, selected_features)
     plot_feature_correlation(df, selected_features)
+    plot_sitting_standing_feature_boxplots(df, sitting_standing_features)
+    plot_subject_sitting_standing_signals(df, sitting_standing_features)
     write_summary(train_df, test_df, feature_cols)
 
     print(f"Dataset insights guardados en: {OUTPUT_DIR}")
