@@ -1,8 +1,10 @@
 from pathlib import Path
+
 import pandas as pd
 
 
-DATASET_DIR = Path("data/raw/UCI HAR Dataset/UCI HAR Dataset")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATASET_DIR = PROJECT_ROOT / "data/raw/UCI HAR Dataset/UCI HAR Dataset"
 
 
 def make_unique(names: list[str]) -> list[str]:

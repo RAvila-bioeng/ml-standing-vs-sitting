@@ -1,0 +1,15 @@
+Accuracy: 0.9335
+
+Confusion matrix:
+[[436  55]
+ [ 13 519]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+     SITTING       0.97      0.89      0.93       491
+    STANDING       0.90      0.98      0.94       532
+
+    accuracy                           0.93      1023
+   macro avg       0.94      0.93      0.93      1023
+weighted avg       0.94      0.93      0.93      1023
