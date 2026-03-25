@@ -5,6 +5,7 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATASET_DIR = PROJECT_ROOT / "data/raw/UCI HAR Dataset/UCI HAR Dataset"
+META_COLUMNS = ["subject", "activity_id", "activity_name"]
 
 
 def make_unique(names: list[str]) -> list[str]:
@@ -61,10 +62,9 @@ def load_split(split: str) -> pd.DataFrame:
     y = pd.read_csv(y_path, sep=r"\s+", header=None, names=["activity_id"])
     subject = pd.read_csv(subject_path, sep=r"\s+", header=None, names=["subject"])
 
-    df = pd.concat([subject, y, X], axis=1)
-
     activity_map = load_activity_labels()
-    df["activity_name"] = df["activity_id"].map(activity_map)
+    activity_name = y["activity_id"].map(activity_map).rename("activity_name")
+    df = pd.concat([subject, y, activity_name, X], axis=1)
 
     return df
 
@@ -76,8 +76,24 @@ def load_full_dataset() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def filter_sitting_standing(df: pd.DataFrame) -> pd.DataFrame:
-    filtered = df[df["activity_name"].isin(["SITTING", "STANDING"])].copy()
+    filtered = filter_activity_pair(df, "SITTING", "STANDING")
     filtered["target"] = filtered["activity_name"].map({"SITTING": 0, "STANDING": 1})
+    return filtered
+
+
+def filter_activity_subset(df: pd.DataFrame, activities: list[str]) -> pd.DataFrame:
+    filtered = df[df["activity_name"].isin(activities)].copy()
+    filtered["activity_name"] = pd.Categorical(
+        filtered["activity_name"],
+        categories=activities,
+        ordered=True,
+    )
+    return filtered.sort_values("activity_name").reset_index(drop=True)
+
+
+def filter_activity_pair(df: pd.DataFrame, negative_label: str, positive_label: str) -> pd.DataFrame:
+    filtered = filter_activity_subset(df, [negative_label, positive_label])
+    filtered["target"] = filtered["activity_name"].map({negative_label: 0, positive_label: 1})
     return filtered
 
 

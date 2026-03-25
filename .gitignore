@@ -212,3 +212,5 @@ __pycache__/
 .ipynb_checkpoints/
 data/raw/
 results/dataset_insights/
+results/sitting_vs_laying_insights/
+results/sitting_vs_laying_insights/walking_triplet_insights/

@@ -1,0 +1,25 @@
+Accuracy: 0.7275
+
+Features usadas:
+- tBodyAcc-max()-X
+- fBodyAccMag-mad()
+- fBodyAcc-bandsEnergy()-1,8
+- tGravityAccMag-std()
+- tBodyAccMag-std()
+- fBodyAcc-std()-X
+
+Confusion matrix:
+[[432  60   4]
+ [185 276  10]
+ [ 54  65 301]]
+
+Classification report:
+                    precision    recall  f1-score   support
+
+           WALKING       0.64      0.87      0.74       496
+  WALKING_UPSTAIRS       0.69      0.59      0.63       471
+WALKING_DOWNSTAIRS       0.96      0.72      0.82       420
+
+          accuracy                           0.73      1387
+         macro avg       0.76      0.72      0.73      1387
+      weighted avg       0.75      0.73      0.73      1387

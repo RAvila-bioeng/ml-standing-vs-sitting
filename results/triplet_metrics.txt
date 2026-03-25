@@ -1,0 +1,17 @@
+Accuracy: 0.9612
+
+Confusion matrix:
+[[446  45   0]
+ [ 14 518   0]
+ [  0   0 496]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+     SITTING       0.97      0.91      0.94       491
+    STANDING       0.92      0.97      0.95       532
+     WALKING       1.00      1.00      1.00       496
+
+    accuracy                           0.96      1519
+   macro avg       0.96      0.96      0.96      1519
+weighted avg       0.96      0.96      0.96      1519

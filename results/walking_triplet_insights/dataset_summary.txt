@@ -1,0 +1,54 @@
+Walking triplet dataset summary
+===============================
+
+Target activities: WALKING, WALKING_UPSTAIRS, WALKING_DOWNSTAIRS
+Train shape: (3285, 564)
+Test shape: (1387, 564)
+Combined shape: (4672, 564)
+Number of subjects: 30
+Number of features: 561
+
+Samples by activity
+-------------------
+                    train  test
+activity_name                  
+WALKING              1226   496
+WALKING_UPSTAIRS     1073   471
+WALKING_DOWNSTAIRS    986   420
+
+Feature groups
+--------------
+    domain_group domain_count sensor_group  sensor_count
+frequency_domain          289      BodyAcc           292
+     time_domain          265     BodyGyro           213
+                                GravityAcc            53
+                                     other             3
+
+Top features for the three-class comparison
+-------------------------------------------
+- tBodyAcc-max()-X
+- fBodyAccMag-mad()
+- fBodyAcc-bandsEnergy()-1,8
+- tGravityAccMag-std()
+- tBodyAccMag-std()
+- fBodyAcc-std()-X
+
+Best features for WALKING vs stairs block
+-----------------------------------------
+- tGravityAcc-entropy()-X
+- tBodyAcc-max()-X
+- fBodyAcc-max()-X
+- fBodyAccMag-mad()
+- fBodyAcc-bandsEnergy()-1,8
+- tGravityAccMag-arCoeff()1
+
+Best features for WALKING_UPSTAIRS vs WALKING_DOWNSTAIRS
+-------------------------------------------------------
+- tBodyAccJerk-max()-X
+- tBodyAcc-max()-X
+- fBodyGyro-kurtosis()-Y
+- fBodyAcc-skewness()-Z
+- fBodyGyro-skewness()-Y
+- fBodyAccMag-mean()
+
+Subject used for sequential plot: 1

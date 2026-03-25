@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import matplotlib
 
 matplotlib.use("Agg")
@@ -11,14 +9,14 @@ from sklearn.preprocessing import StandardScaler
 from load_data import PROJECT_ROOT, filter_activity_subset, load_full_dataset
 
 
-OUTPUT_DIR = PROJECT_ROOT / "results" / "dataset_insights"
+OUTPUT_DIR = PROJECT_ROOT / "results" / "walking_triplet_insights"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-TARGET_ACTIVITIES = ["SITTING", "STANDING", "WALKING"]
+TARGET_ACTIVITIES = ["WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS"]
 ACTIVITY_COLORS = {
-    "SITTING": "#E45756",
-    "STANDING": "#F58518",
     "WALKING": "#4C78A8",
+    "WALKING_UPSTAIRS": "#72B7B2",
+    "WALKING_DOWNSTAIRS": "#54A24B",
 }
 META_COLUMNS = ["subject", "activity_id", "activity_name"]
 
@@ -71,27 +69,29 @@ def pick_top_triplet_features(df: pd.DataFrame, feature_cols: list[str], top_n: 
     return spread.head(top_n).index.tolist()
 
 
-def pick_walking_vs_static_features(df: pd.DataFrame, feature_cols: list[str], top_n: int = 6) -> list[str]:
+def pick_walking_vs_stairs_features(df: pd.DataFrame, feature_cols: list[str], top_n: int = 6) -> list[str]:
     mean_by_activity = df.groupby("activity_name", observed=True)[feature_cols].mean()
-    static_mean = (mean_by_activity.loc["SITTING"] + mean_by_activity.loc["STANDING"]) / 2
-    deltas = (mean_by_activity.loc["WALKING"] - static_mean).abs().sort_values(ascending=False)
+    stairs_mean = (
+        mean_by_activity.loc["WALKING_UPSTAIRS"] + mean_by_activity.loc["WALKING_DOWNSTAIRS"]
+    ) / 2
+    deltas = (mean_by_activity.loc["WALKING"] - stairs_mean).abs().sort_values(ascending=False)
     return deltas.head(top_n).index.tolist()
 
 
-def pick_sitting_vs_standing_features(df: pd.DataFrame, feature_cols: list[str], top_n: int = 6) -> list[str]:
+def pick_upstairs_vs_downstairs_features(df: pd.DataFrame, feature_cols: list[str], top_n: int = 6) -> list[str]:
     mean_by_activity = df.groupby("activity_name", observed=True)[feature_cols].mean()
-    deltas = (mean_by_activity.loc["STANDING"] - mean_by_activity.loc["SITTING"]).abs().sort_values(
-        ascending=False
-    )
+    deltas = (
+        mean_by_activity.loc["WALKING_UPSTAIRS"] - mean_by_activity.loc["WALKING_DOWNSTAIRS"]
+    ).abs().sort_values(ascending=False)
     return deltas.head(top_n).index.tolist()
 
 
 def pick_subject_for_triplet_plot(df: pd.DataFrame) -> int:
     subject_counts = df.groupby(["subject", "activity_name"], observed=True).size().unstack(fill_value=0)
     eligible_subjects = subject_counts[
-        (subject_counts["SITTING"] >= 40)
-        & (subject_counts["STANDING"] >= 40)
-        & (subject_counts["WALKING"] >= 40)
+        (subject_counts["WALKING"] >= 40)
+        & (subject_counts["WALKING_UPSTAIRS"] >= 40)
+        & (subject_counts["WALKING_DOWNSTAIRS"] >= 40)
     ]
 
     if not eligible_subjects.empty:
@@ -101,16 +101,16 @@ def pick_subject_for_triplet_plot(df: pd.DataFrame) -> int:
 
 
 def plot_activity_distribution(counts: pd.DataFrame):
-    ax = counts.plot(kind="bar", figsize=(9, 5), color=["#4C78A8", "#F58518"])
-    ax.set_title("Distribucion de muestras para SITTING, STANDING y WALKING")
+    ax = counts.plot(kind="bar", figsize=(10, 5), color=["#4C78A8", "#F58518"])
+    ax.set_title("Distribucion de muestras para actividades de walking")
     ax.set_xlabel("Actividad")
     ax.set_ylabel("Numero de muestras")
-    ax.tick_params(axis="x", rotation=0)
+    ax.tick_params(axis="x", rotation=15)
 
     for container in ax.containers:
         ax.bar_label(container, padding=3, fontsize=8)
 
-    save_current_figure("triplet_activity_distribution.png")
+    save_current_figure("walking_triplet_activity_distribution.png")
 
 
 def plot_pca_projection(df: pd.DataFrame, feature_cols: list[str]):
@@ -131,12 +131,12 @@ def plot_pca_projection(df: pd.DataFrame, feature_cols: list[str]):
             c=ACTIVITY_COLORS[activity],
         )
 
-    plt.title("PCA para SITTING, STANDING y WALKING")
+    plt.title("PCA para WALKING, WALKING_UPSTAIRS y WALKING_DOWNSTAIRS")
     plt.xlabel(f"PC1 ({explained_variance[0]:.1f}% de varianza explicada)")
     plt.ylabel(f"PC2 ({explained_variance[1]:.1f}% de varianza explicada)")
     plt.legend(loc="best", fontsize=8)
 
-    save_current_figure("triplet_pca_projection.png")
+    save_current_figure("walking_triplet_pca_projection.png")
 
 
 def plot_boxplots(df: pd.DataFrame, selected_features: list[str], filename: str, title: str):
@@ -202,11 +202,11 @@ def plot_subject_triplet_signals(df: pd.DataFrame, selected_features: list[str])
     axes[0].legend(loc="upper right")
     axes[-1].set_xlabel(f"Muestras consecutivas del sujeto {subject_id}")
     fig.suptitle(
-        f"Comparacion secuencial para SITTING, STANDING y WALKING del sujeto {subject_id}",
+        f"Comparacion secuencial para actividades walking del sujeto {subject_id}",
         fontsize=14,
     )
     fig.tight_layout()
-    fig.savefig(OUTPUT_DIR / "triplet_subject_signals.png", dpi=200, bbox_inches="tight")
+    fig.savefig(OUTPUT_DIR / "walking_triplet_subject_signals.png", dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -215,16 +215,16 @@ def write_summary(
     test_df: pd.DataFrame,
     feature_cols: list[str],
     triplet_features: list[str],
-    walking_vs_static_features: list[str],
-    sitting_vs_standing_features: list[str],
+    walking_vs_stairs_features: list[str],
+    upstairs_vs_downstairs_features: list[str],
 ):
     counts = get_activity_counts(train_df, test_df)
     feature_groups = summarize_feature_groups(feature_cols)
     subject_id = pick_subject_for_triplet_plot(pd.concat([train_df, test_df], ignore_index=True))
 
     with open(OUTPUT_DIR / "dataset_summary.txt", "w", encoding="utf-8") as handle:
-        handle.write("Triplet dataset summary\n")
-        handle.write("=======================\n\n")
+        handle.write("Walking triplet dataset summary\n")
+        handle.write("===============================\n\n")
         handle.write(f"Target activities: {', '.join(TARGET_ACTIVITIES)}\n")
         handle.write(f"Train shape: {train_df.shape}\n")
         handle.write(f"Test shape: {test_df.shape}\n")
@@ -241,13 +241,13 @@ def write_summary(
         handle.write("-------------------------------------------\n")
         for feature in triplet_features:
             handle.write(f"- {feature}\n")
-        handle.write("\nBest features for WALKING vs static block\n")
+        handle.write("\nBest features for WALKING vs stairs block\n")
         handle.write("-----------------------------------------\n")
-        for feature in walking_vs_static_features:
+        for feature in walking_vs_stairs_features:
             handle.write(f"- {feature}\n")
-        handle.write("\nBest features for SITTING vs STANDING\n")
-        handle.write("-------------------------------------\n")
-        for feature in sitting_vs_standing_features:
+        handle.write("\nBest features for WALKING_UPSTAIRS vs WALKING_DOWNSTAIRS\n")
+        handle.write("-------------------------------------------------------\n")
+        for feature in upstairs_vs_downstairs_features:
             handle.write(f"- {feature}\n")
         handle.write(f"\nSubject used for sequential plot: {subject_id}\n")
 
@@ -260,28 +260,28 @@ def main():
     feature_cols = get_feature_columns(df)
 
     triplet_features = pick_top_triplet_features(df, feature_cols)
-    walking_vs_static_features = pick_walking_vs_static_features(df, feature_cols)
-    sitting_vs_standing_features = pick_sitting_vs_standing_features(df, feature_cols)
+    walking_vs_stairs_features = pick_walking_vs_stairs_features(df, feature_cols)
+    upstairs_vs_downstairs_features = pick_upstairs_vs_downstairs_features(df, feature_cols)
 
     plot_activity_distribution(get_activity_counts(train_df, test_df))
     plot_pca_projection(df, feature_cols)
     plot_boxplots(
         df,
         triplet_features,
-        "triplet_top_feature_boxplots.png",
-        "Distribucion de las features mas discriminativas del triplete",
+        "walking_triplet_top_feature_boxplots.png",
+        "Distribucion de las features mas discriminativas del triplete walking",
     )
     plot_boxplots(
         df,
-        walking_vs_static_features,
-        "walking_vs_static_boxplots.png",
-        "Features que mejor separan WALKING del bloque estatico",
+        walking_vs_stairs_features,
+        "walking_vs_stairs_boxplots.png",
+        "Features que mejor separan WALKING del bloque de escaleras",
     )
     plot_boxplots(
         df,
-        sitting_vs_standing_features,
-        "sitting_vs_standing_with_walking_context_boxplots.png",
-        "Features que mejor distinguen SITTING y STANDING con WALKING como referencia",
+        upstairs_vs_downstairs_features,
+        "upstairs_vs_downstairs_with_walking_context_boxplots.png",
+        "Features que mejor distinguen WALKING_UPSTAIRS y WALKING_DOWNSTAIRS con WALKING como referencia",
     )
     plot_subject_triplet_signals(df, triplet_features)
     write_summary(
@@ -289,8 +289,8 @@ def main():
         test_df,
         feature_cols,
         triplet_features,
-        walking_vs_static_features,
-        sitting_vs_standing_features,
+        walking_vs_stairs_features,
+        upstairs_vs_downstairs_features,
     )
 
     print(f"Dataset insights guardados en: {OUTPUT_DIR}")
