@@ -213,4 +213,5 @@ __pycache__/
 data/raw/
 results/dataset_insights/
 results/sitting_vs_laying_insights/
-results/sitting_vs_laying_insights/walking_triplet_insights/
+results/walking_triplet_insights/
+results/variables_comparison/
